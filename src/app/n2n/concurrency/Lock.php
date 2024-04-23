@@ -21,12 +21,22 @@
  */
 namespace n2n\concurrency;
 
-use n2n\util\io\fs\FsPath;
-use n2n\concurrency\impl\fs\FileLock;
 
-class Sync {
+interface Lock {
 
-	static function byFileLock(FsPath $fsPath): FileLock {
+	/**
+	 * @param bool $blocking if true the process will be blocked until the lock can be acquired.
+	 * @param LockMode $lockMode
+	 * @return bool whether the lock could be acquired or not. false should only occur if blocking is false
+	 */
+	function acquire(bool $blocking, LockMode $lockMode = LockMode::EXCLUSIVE): bool;
 
-	}
+	/**
+	 * If the lock was acquired before and has not been released yet.
+	 *
+	 * @return bool
+	 */
+	function isActive(): bool;
+
+	function release(): bool;
 }
