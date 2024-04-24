@@ -26,12 +26,12 @@
     },
 	"autoload" : {
 		"psr-4" : {
-			"n2n\\bind\\" : "src/app/n2n/concurrency"
+			"n2n\\concurrency\\" : "src/app/n2n/concurrency"
 		}
 	},
 	"autoload-dev" : {
 		"psr-4" : {
-			"n2n\\bind\\": "src/test/n2n/concurrency"
+			"n2n\\concurrency\\": "src/test/n2n/concurrency"
 		}
 	},
 	"require-dev" : {
