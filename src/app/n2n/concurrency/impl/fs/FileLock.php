@@ -19,12 +19,15 @@
  * Bert Hofmänner.......: Idea, Frontend UI, Community Leader, Marketing
  * Thomas Günther.......: Developer, Hangar
  */
+
 namespace n2n\concurrency\impl\fs;
 
 use n2n\concurrency\Lock;
 use n2n\concurrency\LockMode;
 use n2n\util\io\fs\FsPath;
 use n2n\util\io\IoUtils;
+use n2n\util\io\IoException;
+use n2n\util\io\fs\FileOperationException;
 
 /**
  * A FileLock, when acquired, creates a file and removes it again, when released. While the file exists,
@@ -40,6 +43,9 @@ class FileLock implements Lock {
 
 	function __construct(private FsPath $lockFsPath) {
 
+	}
+	function __destruct() {
+//		$this->release();
 	}
 
 	public function getAcquireAttempts(): int {
@@ -68,20 +74,52 @@ class FileLock implements Lock {
 	 * between the attempts. If the last attempt fails a FileLockTimeoutException will be thrown.
 	 *
 	 * Note: LockMode $lockMode {@link LockMode::SHARED} is not supported, {@link LockMode::EXCLUSIVE} will be used instead.
+	 * @throws FileLockTimeoutException
+	 * @throws IllegalGetAcquireAttemptsException
 	 */
 	function acquire(bool $blocking, LockMode $lockMode = LockMode::EXCLUSIVE): bool {
-		// TODO: Implement acquire() method.
+		$remainingAttempts = $this->getAcquireAttempts();
+		if ($remainingAttempts <= 0) {
+			throw new IllegalGetAcquireAttemptsException();
+		}
 
-		// check if lock file exists
-		// if false IoUtils::putContents(<path>, $token)
-		// check if IoUtils::getContents(<path>) === $token
+		while ($remainingAttempts > 0) {
+			try {
+				$fp = IoUtils::fopen($this->lockFsPath, 'x');
+				fclose($fp);
+				//there was no lock, and we were able to create it
+				return true;
+			} catch (IoException $e) {
+				if ($blocking) {
+					//return False if $blocking is true
+					return false;
+				}
+
+				//there was a lock, we try again till we run out of attempts
+				$remainingAttempts--;
+				if ($remainingAttempts > 0) {
+					usleep($this->getDefaultSleepUs());
+				}
+			}
+		}
+		throw new FileLockTimeoutException();
 	}
 
 	function isActive(): bool {
 		// TODO: Implement isActive() method.
+		return is_file($this->lockFsPath);
 	}
 
 	function release(): bool {
 		// TODO: Implement release() method.
+		if ($this->isActive()){
+			try {
+				IoUtils::unlink($this->lockFsPath);
+				return true;
+			} catch (FileOperationException $e) {
+				return false;
+			}
+		}
+		return true;
 	}
 }
