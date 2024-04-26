@@ -36,16 +36,22 @@ use n2n\util\io\fs\FileOperationException;
 class FileLock implements Lock {
 
 	const DEFAULT_ACQUIRE_ATTEMPTS = 5;
+	const LOCK_DATE_CHECK_ATTEMPTS = 3;
 	const DEFAULT_SLEEP_US = 50000;
+	const MAX_LOCK_TIME_SEC = 50;
 
 	private int $acquireAttempts = self::DEFAULT_ACQUIRE_ATTEMPTS;
+	private int $dateCheckAttempts = self::LOCK_DATE_CHECK_ATTEMPTS;
+	private int $maxLockTime = self::MAX_LOCK_TIME_SEC;
 	private int $defaultSleepUs = self::DEFAULT_SLEEP_US;
 
 	function __construct(private FsPath $lockFsPath) {
-
+		//always create the folder to the file
+		$lockFsPath->getParent()->mkdirs();
 	}
+
 	function __destruct() {
-//		$this->release();
+		$this->release();
 	}
 
 	public function getAcquireAttempts(): int {
@@ -55,6 +61,22 @@ class FileLock implements Lock {
 	public function setAcquireAttempts(int $acquireAttempts): static {
 		$this->acquireAttempts = $acquireAttempts;
 		return $this;
+	}
+
+	public function getDateCheckAttempts(): int {
+		return $this->dateCheckAttempts;
+	}
+
+	public function setDateCheckAttempts(int $dateCheckAttempts): void {
+		$this->dateCheckAttempts = $dateCheckAttempts;
+	}
+
+	public function getMaxLockTime(): int {
+		return $this->maxLockTime;
+	}
+
+	public function setMaxLockTime(int $maxLockTime): void {
+		$this->maxLockTime = $maxLockTime;
 	}
 
 	public function getDefaultSleepUs(): int {
@@ -79,24 +101,34 @@ class FileLock implements Lock {
 	 */
 	function acquire(bool $blocking, LockMode $lockMode = LockMode::EXCLUSIVE): bool {
 		$remainingAttempts = $this->getAcquireAttempts();
+		$dateCheckAttempts = 1;
 		if ($remainingAttempts <= 0) {
 			throw new IllegalGetAcquireAttemptsException();
 		}
 
 		while ($remainingAttempts > 0) {
+			if ($dateCheckAttempts === $this->getDateCheckAttempts()) {
+				$lockTime = IoUtils::getContents($this->lockFsPath);
+				$timeDiff = time() - $lockTime;
+				if ($timeDiff > $this->getMaxLockTime()) {
+					IoUtils::unlink($this->lockFsPath);
+				}
+			}
 			try {
 				$fp = IoUtils::fopen($this->lockFsPath, 'x');
+				IoUtils::fwrite($fp, time());
 				fclose($fp);
 				//there was no lock, and we were able to create it
 				return true;
 			} catch (IoException $e) {
 				if ($blocking) {
-					//return False if $blocking is true
+					//there was a lock, we return False because $blocking is true
 					return false;
 				}
 
 				//there was a lock, we try again till we run out of attempts
 				$remainingAttempts--;
+				$dateCheckAttempts++;
 				if ($remainingAttempts > 0) {
 					usleep($this->getDefaultSleepUs());
 				}
@@ -112,7 +144,7 @@ class FileLock implements Lock {
 
 	function release(): bool {
 		// TODO: Implement release() method.
-		if ($this->isActive()){
+		if ($this->isActive()) {
 			try {
 				IoUtils::unlink($this->lockFsPath);
 				return true;
@@ -122,4 +154,6 @@ class FileLock implements Lock {
 		}
 		return true;
 	}
+
+
 }
