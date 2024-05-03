@@ -19,14 +19,15 @@
  * Bert Hofmänner.......: Idea, Frontend UI, Community Leader, Marketing
  * Thomas Günther.......: Developer, Hangar
  */
-namespace n2n\concurrency;
+namespace n2n\concurrency\sync\impl;
 
+
+use n2n\concurrency\sync\impl\fs\FileLock;
 use n2n\util\io\fs\FsPath;
-use n2n\concurrency\impl\fs\FileLock;
 
 class Sync {
 
 	static function byFileLock(FsPath $fsPath): FileLock {
-
+		return new FileLock($fsPath);
 	}
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace n2n\concurrency;
+namespace n2n\concurrency\sync;
 
 use PHPUnit\Framework\TestCase;
 

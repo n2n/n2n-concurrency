@@ -3,9 +3,11 @@
 namespace n2n\concurrency\impl\fs;
 
 use PHPUnit\Framework\TestCase;
-use n2n\concurrency\LockMode;
+use n2n\concurrency\sync\LockMode;
 use n2n\util\io\fs\FsPath;
 use n2n\util\io\IoUtils;
+use n2n\concurrency\sync\impl\fs\FileLock;
+use n2n\concurrency\sync\err\LockAcquireTimeoutException;
 
 class FileLockTest extends TestCase {
 
@@ -37,32 +39,32 @@ class FileLockTest extends TestCase {
 
 	public function testAcquireExpectException() {
 		//file is crated and therefore locked after first try
-		$this->expectException(FileLockTimeoutException::class);
+		$this->expectException(LockAcquireTimeoutException::class);
 		$fileLock = $this->createFileLock();
-		$fileLock->acquire(false, LockMode::EXCLUSIVE);
-		$isAcquired = $fileLock->acquire(false, LockMode::EXCLUSIVE);
+		$fileLock->acquireNb(LockMode::EXCLUSIVE);
+		$isAcquired = $fileLock->acquireNb(LockMode::EXCLUSIVE);
 		$this->assertFalse($isAcquired);
 	}
 
 	public function testAcquire() {
 		//file is crated and therefore locked after first try
 		$fileLock = $this->createFileLock();
-		$isAcquired = $fileLock->acquire(true, LockMode::EXCLUSIVE);
+		$isAcquired = $fileLock->acquire(LockMode::EXCLUSIVE);
 		$this->assertTrue($isAcquired);
 
 		$fileLock2 = $this->createFileLock('blubb');
-		$isAcquired = $fileLock2->acquire(true, LockMode::EXCLUSIVE);
+		$isAcquired = $fileLock2->acquire(LockMode::EXCLUSIVE);
 		$this->assertTrue($isAcquired);
 
 		$fileLock3 = $this->createFileLock();
-		$isAcquired = $fileLock3->acquire(true, LockMode::EXCLUSIVE);
+		$isAcquired = $fileLock3->acquire(LockMode::EXCLUSIVE);
 		$this->assertFalse($isAcquired);
 
 	}
 
 	public function testIsActive() {
 		$fileLock = $this->createFileLock('blubb');
-		$fileLock->acquire(true, LockMode::EXCLUSIVE);
+		$fileLock->acquire(LockMode::EXCLUSIVE);
 		$isActive = $fileLock->isActive();
 		$this->assertTrue($isActive);
 
@@ -77,7 +79,7 @@ class FileLockTest extends TestCase {
 
 	public function testRelease() {
 		$fileLock = $this->createFileLock('blubb');
-		$fileLock->acquire(true, LockMode::EXCLUSIVE);
+		$fileLock->acquire(LockMode::EXCLUSIVE);
 		$isActive = $fileLock->isActive();
 		$this->assertTrue($isActive);
 
@@ -89,11 +91,11 @@ class FileLockTest extends TestCase {
 
 	public function testMaxTimeDiff() {
 		$fileLock = $this->createFileLock('blubb');
-		$fileLock->acquire(false, LockMode::EXCLUSIVE);
+		$fileLock->acquireNb(LockMode::EXCLUSIVE);
 		sleep(2);
 		$fileLock2 = $this->createFileLock('blubb');
-		$fileLock2->setMaxLockTime(1);
-		$fileLock2->acquire(false, LockMode::EXCLUSIVE);
+		$fileLock2->setOrphanCheckTimeoutSec(1);
+		$fileLock2->acquireNb(LockMode::EXCLUSIVE);
 		$isReleased = $fileLock2->release();
 		$isActive = $fileLock2->isActive();
 		$this->assertFalse($isActive);

@@ -19,17 +19,33 @@
  * Bert Hofmänner.......: Idea, Frontend UI, Community Leader, Marketing
  * Thomas Günther.......: Developer, Hangar
  */
-namespace n2n\concurrency;
+namespace n2n\concurrency\sync;
 
+use n2n\concurrency\sync\err\LockAcquireTimeoutException;
+use n2n\concurrency\sync\err\LockOperationFailedException;
 
+/**
+ * If any failure other than described occurs, a {@link LockOperationFailedException} should be thrown.
+ */
 interface Lock {
 
 	/**
-	 * @param bool $blocking if true the process will be blocked until the lock can be acquired.
+	 * Tries to acquire the lock and blocks the process if the lock for the same unit was already acquired by
+	 * another lock of this kind until it can be acquired because it was released by the other lock released.
+	 *
 	 * @param LockMode $lockMode
-	 * @return bool whether the lock could be acquired or not. false should only occur if blocking is false
+	 * @throws LockAcquireTimeoutException if it takes to long.
 	 */
-	function acquire(bool $blocking, LockMode $lockMode = LockMode::EXCLUSIVE): bool;
+	function acquire(LockMode $lockMode = LockMode::EXCLUSIVE): void;
+
+	/**
+	 * Tries to acquire the lock but does not block the process if the lock for the same unit was already acquired by
+	 * another lock of this kind and returns false in this case.
+	 *
+	 * @param LockMode $lockMode
+	 * @return bool whether the lock could be acquired or not.
+	 */
+	function acquireNb(LockMode $lockMode = LockMode::EXCLUSIVE): bool;
 
 	/**
 	 * If the lock was acquired before and has not been released yet.
@@ -38,5 +54,10 @@ interface Lock {
 	 */
 	function isActive(): bool;
 
+	/**
+	 * Releases a before acquired lock.
+	 *
+	 * @return bool whether a lock could have been released or not. false if {@link self::isActive()} is false.
+	 */
 	function release(): bool;
 }
