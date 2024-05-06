@@ -11,6 +11,7 @@ use n2n\util\io\IoException;
 use n2n\concurrency\sync\impl\fs\FileLock;
 use n2n\concurrency\sync\err\LockAcquireTimeoutException;
 use n2n\util\ex\IllegalStateException;
+use n2n\concurrency\sync\err\LockOperationFailedException;
 
 class FileLockAdvancedTest extends TestCase {
 
@@ -18,6 +19,7 @@ class FileLockAdvancedTest extends TestCase {
 
 	/**
 	 * @throws FileOperationException
+	 * @throws IoException
 	 */
 	function setUp(): void {
 		$this->tmpDirFsPath = new FsPath(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'n2n-concurrency-tmp');
@@ -25,6 +27,10 @@ class FileLockAdvancedTest extends TestCase {
 		$this->tmpDirFsPath->mkdirs();
 	}
 
+	/**
+	 * @throws IoException
+	 * @throws FileOperationException
+	 */
 	function tearDown(): void {
 		$this->tmpDirFsPath->delete();
 	}
@@ -71,6 +77,7 @@ class FileLockAdvancedTest extends TestCase {
 
 		$this->assertFalse($fsPath->exists());
 	}
+
 
 	/**
 	 * @throws IoException
@@ -140,8 +147,37 @@ class FileLockAdvancedTest extends TestCase {
 		$lock = Sync::byFileLock($fsPath)->setAcquireAttempts(2)
 				->setOrphanCheckAfterAttempts(3);
 
-		$this->expectException(IllegalStateException::class);
+		$this->expectException(LockOperationFailedException::class);
 		$lock->acquire();
+	}
+
+	/**
+	 * @throws IoException
+	 */
+	function testCheckOrphanWarning() {
+		$fsPath = $this->tmpDirFsPath->ext('lock1.lock');
+
+		$this->assertFalse($fsPath->exists());
+
+		$lockTime = time() - FileLock::DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC - 1;
+		IoUtils::putContents($fsPath, $lockTime);
+
+		$errorHandlerCalled = false;
+		set_error_handler(function($errno, $errstr) use (&$errorHandlerCalled) {
+			$errorHandlerCalled = true;
+			$this->assertEquals(E_USER_WARNING, $errno);
+			$this->assertStringContainsString('FileLock detected', $errstr);
+			return true;
+		});
+
+		try {
+			$lock1 = Sync::byFileLock($fsPath);
+			$this->assertTrue($lock1->checkForOrphan());
+		} finally {
+			restore_error_handler();
+		}
+
+		$this->assertTrue($errorHandlerCalled);
 	}
 
 	function testAcquireTimeout() {
@@ -192,7 +228,7 @@ class FileLockAdvancedTest extends TestCase {
 	/**
 	 * @throws LockAcquireTimeoutException
 	 */
-	function testAcquire(): void {
+	function testAcquireAfterWait(): void {
 		$fsPath = $this->tmpDirFsPath->ext('lock1.lock');
 
 		$this->assertFalse($fsPath->exists());
@@ -217,5 +253,36 @@ class FileLockAdvancedTest extends TestCase {
 
 		$fileLockMock->acquire();
 		$this->assertTrue($fileLockMock->isActive());
+	}
+
+	function testDirDoesNotExist() {
+		$fsPath = $this->tmpDirFsPath->ext('subdir')->ext('lock1.lock');
+
+		$this->assertFalse($fsPath->exists());
+
+		$this->expectException(LockOperationFailedException::class);
+		$this->expectExceptionMessage('Parent directory for lock file does not exist');
+		Sync::byFileLock($fsPath)->acquireNb();
+	}
+
+	/**
+	 * @throws FileOperationException
+	 */
+	function testDirNotWritable() {
+		$fsPath = $this->tmpDirFsPath->ext('subdir')->ext('lock1.lock');
+		$dirFsPath = $fsPath->getParent();
+		$dirFsPath->mkdirs();
+		$dirFsPath->chmod(0444);
+
+		$this->assertFalse($fsPath->exists());
+
+		$this->expectException(LockOperationFailedException::class);
+		$this->expectExceptionMessage('Lock file location is not writable:');
+
+		try {
+			Sync::byFileLock($fsPath)->acquireNb();
+		} finally {
+			$dirFsPath->chmod(0777);
+		}
 	}
 }

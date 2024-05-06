@@ -83,15 +83,6 @@ class FileLock implements Lock {
 		return $this->orphanCheckAfterAttempts;
 	}
 
-	public function isOrphanDetectionWarningEnabled(): bool {
-		return $this->orphanDetectionWariningEnabled;
-	}
-
-	public function setOrphanDetectionWarningEnabled(bool $warningOnOrphanDetectionEnabled): static {
-		$this->orphanDetectionWariningEnabled = $warningOnOrphanDetectionEnabled;
-		return $this;
-	}
-
 	/**
 	 * This after the here specified number of acquire attempts it will be checked if the lock file is an orphan and
 	 * will delete and overwrite the lock if this is the case. Set it to null to disable orphan checks.
@@ -122,6 +113,15 @@ class FileLock implements Lock {
 		return $this;
 	}
 
+	public function isOrphanDetectionWarningEnabled(): bool {
+		return $this->orphanDetectionWariningEnabled;
+	}
+
+	public function setOrphanDetectionWarningEnabled(bool $warningOnOrphanDetectionEnabled): static {
+		$this->orphanDetectionWariningEnabled = $warningOnOrphanDetectionEnabled;
+		return $this;
+	}
+
 
 	private function checkIfLockWritable(): void {
 		if ($this->lockFsPath->isDir()) {
@@ -130,12 +130,8 @@ class FileLock implements Lock {
 
 		$parentFsPath = $this->lockFsPath->getParent();
 		if (!$parentFsPath->isDir()) {
-			try {
-				$parentFsPath->mkdirs();
-			} catch (IoException $e) {
-				throw new LockOperationFailedException('Parent directories for lock file do not exist and could '
-						. ' not be created: ' . $this->lockFsPath, previous: $e);
-			}
+			throw new LockOperationFailedException('Parent directory for lock file does not exist or is not a '
+					. 'directory: ' . $this->lockFsPath);
 		}
 
 		if (!$parentFsPath->isWritable()) {
@@ -189,7 +185,7 @@ class FileLock implements Lock {
 	 */
 	function acquire(LockMode $lockMode = LockMode::EXCLUSIVE): void {
 		if ($this->orphanCheckAfterAttempts !== null && $this->orphanCheckAfterAttempts > $this->acquireAttempts) {
-			throw new IllegalStateException('orphanCheckAfterAttempts is greater than acquireAttempts');
+			throw new LockOperationFailedException('orphanCheckAfterAttempts is greater than acquireAttempts');
 		}
 
 		for ($i = 1; !$this->tryToCreateFile(); $i++) {
