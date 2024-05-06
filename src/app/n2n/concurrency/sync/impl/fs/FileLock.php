@@ -32,6 +32,7 @@ use n2n\util\ex\IllegalStateException;
 use n2n\util\type\ArgUtils;
 use n2n\concurrency\sync\err\LockOperationFailedException;
 use n2n\concurrency\sync\err\LockAcquireTimeoutException;
+use n2n\util\StringUtils;
 
 /**
  * A FileLock, when acquired, creates a file and removes it again, when released. While the file exists,
@@ -39,15 +40,16 @@ use n2n\concurrency\sync\err\LockAcquireTimeoutException;
  */
 class FileLock implements Lock {
 
-	const DEFAULT_ACQUIRE_ATTEMPTS = 5;
-	const DEFAULT_SLEEP_US = 50000;
-	const DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS = 3;
+	const DEFAULT_ACQUIRE_ATTEMPTS = 15000000 / self::DEFAULT_SLEEP_US; // timout 15 seconds;
+	const DEFAULT_SLEEP_US = 25000;
+	const DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS = 1;
 	const DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC = 120;
 
 	private int $acquireAttempts = self::DEFAULT_ACQUIRE_ATTEMPTS;
 	private int $sleepUs = self::DEFAULT_SLEEP_US;
-	private int $orphanCheckAfterAttempts = self::DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS;
+	private ?int $orphanCheckAfterAttempts = self::DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS;
 	private int $orphanCheckTimeoutSec = self::DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC;
+	private bool $orphanDetectionWariningEnabled = true;
 
 	private bool $acquired = false;
 
@@ -81,18 +83,43 @@ class FileLock implements Lock {
 		return $this->orphanCheckAfterAttempts;
 	}
 
-	public function setOrphanCheckAfterAttempts(int $orphanCheckAfterAttempts): void {
-		ArgUtils::assertTrue($orphanCheckAfterAttempts > 0, 'Illegal dateCheckAttempts: ' . $orphanCheckAfterAttempts);
+	public function isOrphanDetectionWarningEnabled(): bool {
+		return $this->orphanDetectionWariningEnabled;
+	}
+
+	public function setOrphanDetectionWarningEnabled(bool $warningOnOrphanDetectionEnabled): static {
+		$this->orphanDetectionWariningEnabled = $warningOnOrphanDetectionEnabled;
+		return $this;
+	}
+
+	/**
+	 * This after the here specified number of acquire attempts it will be checked if the lock file is an orphan and
+	 * will delete and overwrite the lock if this is the case. Set it to null to disable orphan checks.
+	 *
+	 * Note: If you want {@link self::acquireNb()} to check for orphans too, this must be set to 1. Default is
+	 * {@link self::DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS}
+	 *
+	 * Note: This could be problematic if your application is running on multiple instances with a shared storage and
+	 * different current time.
+	 *
+	 * @param int|null $orphanCheckAfterAttempts
+	 * @return static
+	 */
+	public function setOrphanCheckAfterAttempts(?int $orphanCheckAfterAttempts): static {
+		ArgUtils::assertTrue($orphanCheckAfterAttempts === null || $orphanCheckAfterAttempts > 0,
+				'Illegal dateCheckAttempts: ' . $orphanCheckAfterAttempts);
 		$this->orphanCheckAfterAttempts = $orphanCheckAfterAttempts;
+		return $this;
 	}
 
 	public function getOrphanCheckTimeoutSec(): int {
 		return $this->orphanCheckTimeoutSec;
 	}
 
-	public function setOrphanCheckTimeoutSec(int $orphanCheckTimeoutSec): void {
+	public function setOrphanCheckTimeoutSec(int $orphanCheckTimeoutSec): static {
 		ArgUtils::assertTrue($orphanCheckTimeoutSec > 0, 'Illegal $maxLockTime: ' . $orphanCheckTimeoutSec);
 		$this->orphanCheckTimeoutSec = $orphanCheckTimeoutSec;
+		return $this;
 	}
 
 
@@ -116,7 +143,7 @@ class FileLock implements Lock {
 		}
 	}
 
-	private function checkForOrphan(): bool {
+	public function checkForOrphan(): bool {
 		try {
 			$lockTimeSec = IoUtils::getContents($this->lockFsPath);
 		} catch (IoException $e) {
@@ -128,8 +155,11 @@ class FileLock implements Lock {
 			return false;
 		}
 
-		trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
-				. '; Seconds since creation: ' . $lockTimeSec . '; Timeout seconds: ' . $this->orphanCheckTimeoutSec);
+		if ($this->orphanDetectionWariningEnabled) {
+			trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
+					. '; Timestamp is too old or invalid: ' . StringUtils::reduce($lockTimeSec, 30, '...')
+					. '; Timeout seconds: ' . $this->orphanCheckTimeoutSec, E_USER_WARNING);
+		}
 
 		try {
 			IoUtils::unlink($this->lockFsPath);
@@ -152,20 +182,24 @@ class FileLock implements Lock {
 	 * {@inheritDoc}
 	 *
 	 * If the lock could not be achieved on the first attempt it will return false otherwise it
-	 * will make {@link self::$acquireAttempts} - 1 more attempts to do so an usleep {@link self::$sleepUs} microseconds
-	 * between the attempts. If the last attempt fails a FileLockTimeoutException will be thrown.
+	 * will make {@link self::$acquireAttempts} - 1 more attempts to do so and usleep {@link self::$sleepUs} microseconds
+	 * between the attempts. If the last attempt fails a {@link LockAcquireTimeoutException} will be thrown.
 	 *
 	 * Note: LockMode $lockMode {@link LockMode::SHARED} is not supported, {@link LockMode::EXCLUSIVE} will be used instead.
 	 */
 	function acquire(LockMode $lockMode = LockMode::EXCLUSIVE): void {
-		for ($i = 0; !$this->acquireNb($lockMode); ++$i) {
-			if ($i === $this->orphanCheckTimeoutSec && $this->checkForOrphan()) {
+		if ($this->orphanCheckAfterAttempts !== null && $this->orphanCheckAfterAttempts > $this->acquireAttempts) {
+			throw new IllegalStateException('orphanCheckAfterAttempts is greater than acquireAttempts');
+		}
+
+		for ($i = 0; !$this->tryToCreateFile(); ++$i) {
+			if ($i === $this->orphanCheckAfterAttempts && $this->checkForOrphan()) {
 				continue;
 			}
 
 			if ($i >= $this->acquireAttempts) {
 				throw new LockAcquireTimeoutException('Could not acquire lock in the required time frame.'
-						. 'Max attempts: ' . $this->acquireAttempts . '; Sleep between attempts us: ' . $this->sleepUs);
+						. ' Max attempts: ' . $this->acquireAttempts . '; Sleep between attempts us: ' . $this->sleepUs);
 			}
 
 			usleep($this->getSleepUs());
@@ -212,7 +246,20 @@ class FileLock implements Lock {
 //		throw new FileLockTimeoutException();
 	}
 
+	/**
+	 *
+	 * @param LockMode $lockMode
+	 * @return bool
+	 */
 	function acquireNb(LockMode $lockMode = LockMode::EXCLUSIVE): bool {
+		if ($this->tryToCreateFile()) {
+			return true;
+		}
+
+		return $this->orphanCheckAfterAttempts === 1 && $this->checkForOrphan() && $this->tryToCreateFile();
+	}
+
+	protected function tryToCreateFile(): bool {
 		$this->checkIfLockWritable();
 
 		try {
