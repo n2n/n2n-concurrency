@@ -22,7 +22,7 @@ class FileLockAdvancedTest extends TestCase {
 	 * @throws IoException
 	 */
 	function setUp(): void {
-		$this->tmpDirFsPath = new FsPath(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'n2n-concurrency-tmp');
+		$this->tmpDirFsPath = new FsPath(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'n2n-concurrency-tmp-' . uniqid());
 		$this->tmpDirFsPath->delete();
 		$this->tmpDirFsPath->mkdirs();
 	}
