@@ -207,7 +207,7 @@ class FileLockAdvancedTest extends TestCase {
 		$blockingLock = Sync::byFileLock($fsPath);
 		$this->assertTrue($blockingLock->acquireNb());
 
-		$lock = Sync::byFileLock($fsPath)->setAcquireAttempts(3)->setSleepUs(10000);
+		$lock = Sync::byFileLock($fsPath)->setAcquireAttempts(3)->setSleepUs(15000);
 
 		$startS = microtime(true);
 
@@ -220,9 +220,9 @@ class FileLockAdvancedTest extends TestCase {
 		$deltaS = (microtime(true)) - $startS;
 
 		// only 2 sleep attempts
-		$this->assertGreaterThanOrEqual(20000, $deltaS * 1000000);
+		$this->assertGreaterThanOrEqual(30000, $deltaS * 1000000);
 		// less than 3 sleep attempts
-		$this->assertLessThan(30000, $deltaS * 1000000);
+		$this->assertLessThan(45000, $deltaS * 1000000);
 	}
 
 	/**
