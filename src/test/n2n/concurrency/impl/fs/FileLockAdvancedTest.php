@@ -129,7 +129,8 @@ class FileLockAdvancedTest extends TestCase {
 
 		try {
 			$lock = Sync::byFileLock($fsPath)->setAcquireAttempts(3)->setSleepUs(0)
-					->setOrphanCheckAfterAttempts(null)->setOrphanDetectionWarningEnabled(false);
+					->setOrphanCheckAfterAttempts(null)
+					->setOrphanDetectionWarningEnabled(false);
 			$lock->acquire();
 			$this->fail('LockAcquireTimeoutException expected');
 		} catch (LockAcquireTimeoutException $e) {
