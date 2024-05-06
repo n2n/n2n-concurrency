@@ -192,7 +192,7 @@ class FileLock implements Lock {
 			throw new IllegalStateException('orphanCheckAfterAttempts is greater than acquireAttempts');
 		}
 
-		for ($i = 0; !$this->tryToCreateFile(); ++$i) {
+		for ($i = 1; !$this->tryToCreateFile(); $i++) {
 			if ($i === $this->orphanCheckAfterAttempts && $this->checkForOrphan()) {
 				continue;
 			}
@@ -202,7 +202,7 @@ class FileLock implements Lock {
 						. ' Max attempts: ' . $this->acquireAttempts . '; Sleep between attempts us: ' . $this->sleepUs);
 			}
 
-			usleep($this->getSleepUs());
+			$this->wait();
 		}
 //
 //		$remainingAttempts = $this->getAcquireAttempts();
@@ -257,6 +257,10 @@ class FileLock implements Lock {
 		}
 
 		return $this->orphanCheckAfterAttempts === 1 && $this->checkForOrphan() && $this->tryToCreateFile();
+	}
+
+	protected function wait(): void {
+		usleep($this->sleepUs);
 	}
 
 	protected function tryToCreateFile(): bool {

@@ -144,4 +144,49 @@ class FileLockAdvancedTest extends TestCase {
 		$lock->acquire();
 	}
 
+	function testAcquireTimeout() {
+		$fsPath = $this->tmpDirFsPath->ext('lock1.lock');
+
+		$this->assertFalse($fsPath->exists());
+
+		$fileLockMock = $this->getMockBuilder(FileLock::class)
+				->setConstructorArgs([$fsPath])
+				->onlyMethods(['tryToCreateFile', 'checkForOrphan', 'wait'])
+				->getMock();
+		$fileLockMock->setAcquireAttempts(3);
+
+
+		$fileLockMock->expects($this->exactly(1))->method('checkForOrphan')->willReturn(false);
+		$fileLockMock->expects($this->exactly(3))->method('tryToCreateFile')->willReturn(false);
+		$fileLockMock->expects($this->exactly(2))->method('wait');
+
+		$this->expectException(LockAcquireTimeoutException::class);
+		$fileLockMock->acquire();
+	}
+
+	function testAcquireSleep(): void {
+		$fsPath = $this->tmpDirFsPath->ext('lock1.lock');
+
+		$this->assertFalse($fsPath->exists());
+
+		$blockingLock = Sync::byFileLock($fsPath);
+		$this->assertTrue($blockingLock->acquireNb());
+
+		$lock = Sync::byFileLock($fsPath)->setAcquireAttempts(3)->setSleepUs(5000);
+
+		$startS = microtime(true);
+
+		try {
+			$lock->acquire();
+			$this->fail(LockAcquireTimeoutException::class . ' expected.');
+		} catch (LockAcquireTimeoutException $e) {
+		}
+
+		$deltaS = (microtime(true)) - $startS;
+
+		// only 2 sleep attempts
+		$this->assertGreaterThanOrEqual(10000, $deltaS * 1000000);
+		// less than 3 sleep attempts
+		$this->assertLessThan(15000, $deltaS * 1000000);
+	}
 }
