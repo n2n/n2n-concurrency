@@ -49,9 +49,9 @@ class FileLock implements Lock {
 	private int $sleepUs = self::DEFAULT_SLEEP_US;
 	private ?int $orphanCheckAfterAttempts = self::DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS;
 	private int $orphanCheckTimeoutSec = self::DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC;
-	private bool $orphanDetectionWariningEnabled = true;
+	private bool $orphanDetectionWarningEnabled = true;
 
-	private bool $acquired = false;
+	private ?string $acquireTime = null;
 
 
 	function __construct(private FsPath $lockFsPath) {
@@ -108,17 +108,17 @@ class FileLock implements Lock {
 	}
 
 	public function setOrphanCheckTimeoutSec(int $orphanCheckTimeoutSec): static {
-		ArgUtils::assertTrue($orphanCheckTimeoutSec > 0, 'Illegal $maxLockTime: ' . $orphanCheckTimeoutSec);
+		ArgUtils::assertTrue($orphanCheckTimeoutSec > 0, 'Illegal orphanCheckTimeoutSec: ' . $orphanCheckTimeoutSec);
 		$this->orphanCheckTimeoutSec = $orphanCheckTimeoutSec;
 		return $this;
 	}
 
 	public function isOrphanDetectionWarningEnabled(): bool {
-		return $this->orphanDetectionWariningEnabled;
+		return $this->orphanDetectionWarningEnabled;
 	}
 
 	public function setOrphanDetectionWarningEnabled(bool $warningOnOrphanDetectionEnabled): static {
-		$this->orphanDetectionWariningEnabled = $warningOnOrphanDetectionEnabled;
+		$this->orphanDetectionWarningEnabled = $warningOnOrphanDetectionEnabled;
 		return $this;
 	}
 
@@ -151,7 +151,7 @@ class FileLock implements Lock {
 			return false;
 		}
 
-		if ($this->orphanDetectionWariningEnabled) {
+		if ($this->orphanDetectionWarningEnabled) {
 			trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
 					. '; Timestamp is too old or invalid: ' . StringUtils::reduce($lockTimeSec, 30, '...')
 					. '; Timeout seconds: ' . $this->orphanCheckTimeoutSec, E_USER_WARNING);
@@ -242,6 +242,10 @@ class FileLock implements Lock {
 //		throw new FileLockTimeoutException();
 	}
 
+	function getAcquireTime(): ?string {
+		return $this->acquireTime;
+	}
+
 	/**
 	 *
 	 * @param LockMode $lockMode
@@ -270,8 +274,9 @@ class FileLock implements Lock {
 		}
 
 		try {
-			IoUtils::fwrite($fp, time());
-			$this->acquired = true;
+			$time = (string) (time() + IllegalStateException::try(fn () => random_int(0, 9999) / 10000));
+			IoUtils::fwrite($fp, $time);
+			$this->acquireTime = $time;
 			return true;
 		} catch (IoException $e) {
 			throw new LockOperationFailedException('Could not write time to lock file: ' . $this->lockFsPath,
@@ -282,19 +287,44 @@ class FileLock implements Lock {
 	}
 
 	function isActive(): bool {
-		return $this->acquired;
+		return $this->acquireTime !== null;
+	}
+
+	protected function releaseCheck(): void {
+		try {
+			$lockTime = IoUtils::getContents($this->lockFsPath);
+		} catch (IoException $e) {
+			throw new LockOperationFailedException('Could not release lock. Lock file did not exist: ' . $this->lockFsPath,
+					previous: $e);
+		}
+
+		if ($lockTime !== $this->acquireTime) {
+			throw new LockOperationFailedException('Could not release lock. Lock was overwritten by other lock. '
+					. ' Timestamp missmatch: ' . $this->lockFsPath . '; ' . $lockTime . ' != ' . $this->acquireTime);
+		}
 	}
 
 	function release(): bool {
-		if (!$this->acquired) {
+		if (!$this->isActive()) {
 			return false;
 		}
 
 		try {
+			$this->releaseCheck();
+		} finally {
+			$this->acquireTime = null;
+		}
+
+		// There is still a small chance that an orphan check of another lock could have overwritten the lock file
+		// at this point. In this case the following unlink would delete a lock which does not belong to the current lock
+		// anymore. However, this can only happen if the orphan timeout was specified with an inappropriate value.
+
+		try {
 			IoUtils::unlink($this->lockFsPath);
-			$this->acquired = false;
+			$this->acquireTime = null;
 			return true;
 		} catch (IoException $e) {
+			$this->acquireTime = null;
 			throw new LockOperationFailedException('Could not release lock. Lock file: ' . $this->lockFsPath,
 					previous: $e);
 		}
