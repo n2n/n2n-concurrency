@@ -151,12 +151,6 @@ class FileLock implements Lock {
 			return false;
 		}
 
-		if ($this->orphanDetectionWarningEnabled) {
-			trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
-					. '; Timestamp is too old or invalid: ' . StringUtils::reduce($lockTimeSec, 30, '...')
-					. '; Timeout seconds: ' . $this->orphanCheckTimeoutSec, E_USER_WARNING);
-		}
-
 		try {
 			IoUtils::unlink($this->lockFsPath);
 			return true;
@@ -171,6 +165,12 @@ class FileLock implements Lock {
 			// and in this case this exception would be
 			throw new LockOperationFailedException('Could not delete orphan lock file: ' . $this->lockFsPath,
 					previous: $e);
+		} finally {
+			if ($this->orphanDetectionWarningEnabled) {
+				trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
+						. '; Timestamp is too old or invalid: ' . StringUtils::reduce($lockTimeSec, 30, '...')
+						. '; Timeout seconds: ' . $this->orphanCheckTimeoutSec, E_USER_WARNING);
+			}
 		}
 	}
 
