@@ -166,6 +166,7 @@ class FileLock implements Lock {
 			throw new LockOperationFailedException('Could not delete orphan lock file: ' . $this->lockFsPath,
 					previous: $e);
 		} finally {
+			// trigger_error after remove so strict mode does not block removal
 			if ($this->orphanDetectionWarningEnabled) {
 				trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
 						. '; Timestamp is too old or invalid: ' . StringUtils::reduce($lockTimeSec, 30, '...')
