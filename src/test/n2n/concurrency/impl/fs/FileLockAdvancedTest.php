@@ -10,6 +10,7 @@ use n2n\util\io\IoUtils;
 use n2n\util\io\IoException;
 use n2n\concurrency\sync\impl\fs\FileLock;
 use n2n\concurrency\sync\err\LockAcquireTimeoutException;
+use n2n\util\ex\IllegalStateException;
 use n2n\concurrency\sync\err\LockOperationFailedException;
 
 class FileLockAdvancedTest extends TestCase {
@@ -285,6 +286,4 @@ class FileLockAdvancedTest extends TestCase {
 			$dirFsPath->chmod(0777);
 		}
 	}
-
-
 }
