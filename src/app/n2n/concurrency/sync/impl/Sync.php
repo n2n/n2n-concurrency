@@ -24,10 +24,16 @@ namespace n2n\concurrency\sync\impl;
 
 use n2n\concurrency\sync\impl\fs\FileLock;
 use n2n\util\io\fs\FsPath;
+use n2n\concurrency\sync\impl\fs\AdvisoryFlock;
 
 class Sync {
 
 	static function byFileLock(FsPath $fsPath): FileLock {
 		return new FileLock($fsPath);
 	}
+
+	static function byFlock(FsPath $fsPath): FileLock {
+		return new AdvisoryFlock($fsPath);
+	}
+
 }
