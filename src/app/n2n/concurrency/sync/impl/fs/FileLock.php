@@ -27,7 +27,6 @@ use n2n\concurrency\sync\LockMode;
 use n2n\util\io\fs\FsPath;
 use n2n\util\io\IoUtils;
 use n2n\util\io\IoException;
-use n2n\util\io\fs\FileOperationException;
 use n2n\util\ex\IllegalStateException;
 use n2n\util\type\ArgUtils;
 use n2n\concurrency\sync\err\LockOperationFailedException;

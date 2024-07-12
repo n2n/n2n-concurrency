@@ -32,7 +32,7 @@ class Sync {
 		return new FileLock($fsPath);
 	}
 
-	static function byFlock(FsPath $fsPath): FileLock {
+	static function byFlock(FsPath $fsPath): AdvisoryFlock {
 		return new AdvisoryFlock($fsPath);
 	}
 

@@ -1,12 +1,11 @@
 <?php
 
-namespace n2n\concurrency\impl\fs;
+namespace n2n\concurrency\sync\impl\fs;
 
 use PHPUnit\Framework\TestCase;
 use n2n\concurrency\sync\LockMode;
 use n2n\util\io\fs\FsPath;
 use n2n\util\io\IoUtils;
-use n2n\concurrency\sync\impl\fs\FileLock;
 use n2n\concurrency\sync\err\LockAcquireTimeoutException;
 use n2n\concurrency\sync\err\LockOperationFailedException;
 use n2n\util\io\IoException;
