@@ -33,6 +33,9 @@ interface Lock {
 	 * Tries to acquire the lock and blocks the process if the lock for the same unit was already acquired by
 	 * another lock of this kind until it can be acquired because it was released by the other lock released.
 	 *
+	 * If this lock was already acquired ({@link self::isActive()} returns true), a {@link LockOperationFailedException}
+	 * should be thrown.
+	 *
 	 * @param LockMode $lockMode
 	 * @throws LockAcquireTimeoutException if it takes to long.
 	 */

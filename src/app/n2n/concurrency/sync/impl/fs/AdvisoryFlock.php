@@ -49,6 +49,10 @@ class AdvisoryFlock implements Lock {
 	}
 
 	function acquire(LockMode $lockMode = LockMode::EXCLUSIVE): void {
+		if ($this->isActive()) {
+			throw new LockOperationFailedException('Lock was already acquired.');
+		}
+
 		$lock = $lockMode === LockMode::EXCLUSIVE ? LOCK_EX : LOCK_SH;
 
 		try {

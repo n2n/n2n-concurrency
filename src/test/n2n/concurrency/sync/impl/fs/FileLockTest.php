@@ -46,13 +46,24 @@ class FileLockTest extends TestCase {
 		return new FileLock($fsPath);
 	}
 
+	public function testDoubleAcquire() {
+		//file is crated and therefore locked after first try
+		$this->expectException(LockOperationFailedException::class);
+		$fileLock = $this->createFileLock()->setAcquireAttempts(3)->setSleepUs(50000);
+		$fileLock->acquireNb(LockMode::EXCLUSIVE);
+		$fileLock->acquire(LockMode::EXCLUSIVE);
+		$this->assertFalse($fileLock->isActive());
+	}
+
 	public function testAcquireExpectException() {
 		//file is crated and therefore locked after first try
 		$this->expectException(LockAcquireTimeoutException::class);
 		$fileLock = $this->createFileLock()->setAcquireAttempts(3)->setSleepUs(50000);
 		$fileLock->acquireNb(LockMode::EXCLUSIVE);
-		$fileLock->acquire(LockMode::EXCLUSIVE);
-		$this->assertFalse($fileLock->isActive());
+		$fileLock2 = $this->createFileLock()->setAcquireAttempts(3)->setSleepUs(50000);
+		$fileLock2->acquire(LockMode::EXCLUSIVE);
+		$this->assertTrue($fileLock->isActive());
+		$this->assertFalse($fileLock2->isActive());
 	}
 
 	public function testAcquire() {

@@ -5,8 +5,13 @@ namespace n2n\concurrency\sync\impl\fs;
 use PHPUnit\Framework\TestCase;
 use n2n\util\io\fs\FsPath;
 use n2n\concurrency\sync\LockMode;
+use n2n\concurrency\sync\err\LockAcquireTimeoutException;
+use n2n\concurrency\sync\err\LockOperationFailedException;
 
 class AdvisoryFlockTest extends TestCase {
+	/**
+	 * @throws LockAcquireTimeoutException
+	 */
 	function testCacheFileLock() {
 		$lockFileFsPath = new FsPath(tempnam(sys_get_temp_dir(),''));
 		$lockFileFsPath->delete();
@@ -24,6 +29,21 @@ class AdvisoryFlockTest extends TestCase {
 
 	}
 
+	/**
+	 * @throws LockAcquireTimeoutException
+	 */
+	function testCacheFileLockExpectException() {
+		$lockFileFsPath = new FsPath(tempnam(sys_get_temp_dir(),''));
+		$lockFileFsPath->delete();
+		$this->expectException(LockOperationFailedException::class);
+
+		$this->assertTrue(!$lockFileFsPath->exists());
+
+		$lock = new AdvisoryFlock($lockFileFsPath);
+		$lock->acquire(LockMode::EXCLUSIVE);
+		$lock->acquire(LockMode::EXCLUSIVE);
+
+	}
 
 	function testKeepFile() {
 		$lockFileFsPath = new FsPath(tempnam(sys_get_temp_dir(),''));

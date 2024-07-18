@@ -183,6 +183,10 @@ class FileLock implements Lock {
 	 * Note: LockMode $lockMode {@link LockMode::SHARED} is not supported, {@link LockMode::EXCLUSIVE} will be used instead.
 	 */
 	function acquire(LockMode $lockMode = LockMode::EXCLUSIVE): void {
+		if ($this->isActive()) {
+			throw new LockOperationFailedException('FileLock was already acquired: ' . $this->lockFsPath);
+		}
+
 		if ($this->orphanCheckAfterAttempts !== null && $this->orphanCheckAfterAttempts > $this->acquireAttempts) {
 			throw new LockOperationFailedException('orphanCheckAfterAttempts is greater than acquireAttempts');
 		}
