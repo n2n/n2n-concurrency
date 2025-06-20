@@ -42,7 +42,7 @@ class FileLock implements Lock {
 	const DEFAULT_ACQUIRE_ATTEMPTS = 15000000 / self::DEFAULT_SLEEP_US; // timout 15 seconds;
 	const DEFAULT_SLEEP_US = 25000;
 	const DEFAULT_ORPHAN_CHECK_AFTER_ATTEMPTS = 1;
-	const DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC = 120;
+	const DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC = 360;
 
 	private int $acquireAttempts = self::DEFAULT_ACQUIRE_ATTEMPTS;
 	private int $sleepUs = self::DEFAULT_SLEEP_US;
