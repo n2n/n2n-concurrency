@@ -273,6 +273,7 @@ class FileLock implements Lock {
 			$fp = IoUtils::fopen($this->lockFsPath, 'x');
 			// there was no lock, and we were able to create it
 		} catch (IoException $e) {
+			trigger_error('debug info: fopen x of ' . $this->lockFsPath . ' failed: ' . $e->getMessage());
 			return false;
 		}
 
