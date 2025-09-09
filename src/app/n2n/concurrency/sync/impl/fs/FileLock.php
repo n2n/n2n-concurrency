@@ -270,7 +270,7 @@ class FileLock implements Lock {
 		$this->checkIfLockWritable();
 
 		try {
-			$fp = IoUtils::fopen($this->lockFsPath, 'x');
+			$fp = IoUtils::fopen($this->lockFsPath, 'x+');
 			// there was no lock, and we were able to create it
 		} catch (IoException $e) {
 //			trigger_error('debug info: fopen x of ' . $this->lockFsPath . ' failed: ' . $e->getMessage());
@@ -280,6 +280,15 @@ class FileLock implements Lock {
 		try {
 			$time = (string) (time() + IllegalStateException::try(fn () => random_int(0, 9999) / 10000));
 			IoUtils::fwrite($fp, $time);
+
+			// fopen is not atomic. another process could have also succeeded to fopen the same file
+			// if so this lock will yield the lock to the other process.
+			usleep(1); // try to yield to other process
+			IoUtils::fseek($fp, 0);
+			if ($time !== IoUtils::fread($fp, 65536)) {
+				return false;
+			}
+
 			$this->acquireTime = $time;
 			return true;
 		} catch (IoException $e) {
