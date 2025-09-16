@@ -198,7 +198,8 @@ class FileLock implements Lock {
 
 			if ($i >= $this->acquireAttempts) {
 				throw new LockAcquireTimeoutException('Could not acquire lock in the required time frame.'
-						. ' Max attempts: ' . $this->acquireAttempts . '; Sleep between attempts in us: ' . $this->sleepUs);
+						. ' Lock file: ' . $this->lockFsPath . '; Max attempts: ' . $this->acquireAttempts
+						. '; Sleep between attempts in us: ' . $this->sleepUs);
 			}
 
 			$this->wait();
