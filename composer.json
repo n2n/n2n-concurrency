@@ -20,7 +20,7 @@
 		"vendor-dir" : "src/vendor"
 	},
 	"require" : {
-		"n2n/n2n-util": "~7.4.3",
+		"n2n/n2n-util": "~7.5.0",
         "ext-ctype": "*",
       "ext-mbstring": "*"
     },
