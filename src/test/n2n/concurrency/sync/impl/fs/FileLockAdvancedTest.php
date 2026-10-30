@@ -151,6 +151,26 @@ class FileLockAdvancedTest extends TestCase {
 	}
 
 	/**
+	 * An empty lock file was just created by another lock which has not written its timestamp yet and therefore must
+	 * not be treated as an orphan.
+	 *
+	 * @throws IoException
+	 */
+	function testEmptyLockFileIsNoOrphan(): void {
+		$fsPath = $this->tmpDirFsPath->ext('lock1.lock');
+		IoUtils::putContents($fsPath, '');
+
+		$lock = Sync::byFileLock($fsPath)->setOrphanDetectionWarningEnabled(false);
+		$this->assertFalse($lock->checkForOrphan());
+		$this->assertFalse($lock->acquireNb());
+		$this->assertTrue($fsPath->exists());
+
+		touch($fsPath, time() - FileLock::DEFAULT_ORPHAN_CHECK_TIMEOUT_SEC - 1);
+		$this->assertTrue($lock->checkForOrphan());
+		$this->assertFalse($fsPath->exists());
+	}
+
+	/**
 	 * @throws IoException
 	 */
 	function testCheckOrphanWarning() {

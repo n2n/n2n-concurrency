@@ -150,6 +150,12 @@ class FileLock implements Lock {
 			return false;
 		}
 
+		// An empty lock file was most likely just created by another lock which has not written its timestamp yet
+		// (see self::tryToCreateFile()). It must only be treated as an orphan if it was not modified for too long.
+		if ($lockTimeSec === '' && !$this->isLockFileOutdated()) {
+			return false;
+		}
+
 		if ($this->orphanDetectionWarningEnabled) {
 			trigger_error(FileLock::class . ' detected an orphan lock file and will remove it: ' . $this->lockFsPath
 					. '; Timestamp is too old or invalid: ' . StringUtils::reduce($lockTimeSec, 30, '...')
@@ -170,6 +176,16 @@ class FileLock implements Lock {
 			// and in this case this exception would be
 			throw new LockOperationFailedException('Could not delete orphan lock file: ' . $this->lockFsPath,
 					previous: $e);
+		}
+	}
+
+	private function isLockFileOutdated(): bool {
+		clearstatcache(true, (string) $this->lockFsPath);
+		try {
+			return (time() - $this->lockFsPath->getMTime()) > $this->orphanCheckTimeoutSec;
+		} catch (IoException $e) {
+			// lock could have been released in the meantime.
+			return false;
 		}
 	}
 
@@ -282,11 +298,17 @@ class FileLock implements Lock {
 			$time = (string) (time() + IllegalStateException::try(fn () => random_int(0, 9999) / 10000));
 			IoUtils::fwrite($fp, $time);
 
-			// fopen is not atomic. another process could have also succeeded to fopen the same file
-			// if so this lock will yield the lock to the other process.
+			fflush($fp);
+
+			// The lock file could have been removed (e.g. by an orphan check) and recreated by another process in the
+			// meantime. Reading through $fp would still return our own content even if the file was unlinked, so
+			// the file must be read again through its path to verify that it still belongs to this lock.
 			usleep(1); // try to yield to other process
-			IoUtils::fseek($fp, 0);
-			if ($time !== IoUtils::fread($fp, 65536)) {
+			try {
+				if ($time !== IoUtils::getContents($this->lockFsPath)) {
+					return false;
+				}
+			} catch (IoException $e) {
 				return false;
 			}
 
@@ -345,3 +367,5 @@ class FileLock implements Lock {
 	}
 
 }
+
+
